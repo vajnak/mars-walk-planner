@@ -1,0 +1,8 @@
+# Raw NASA downloads are too big for GitHub (limit 100 MB per file). Keep them on your laptop only.
+*.IMG
+*.JP2
+*.img
+*.jp2
+__pycache__/
+.venv/
+.DS_Store
