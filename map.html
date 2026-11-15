@@ -30,24 +30,27 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 <p id="err"></p>
 <div class="grid">
  <div class="card"><canvas id="map" aria-label="Terrain map"></canvas><div class="row" id="layers"></div>
-  <div class="lg"><span><i style="background:#40b87c"></i>gentle</span><span><i style="background:#e8c440"></i>moderate</span><span><i style="background:#ec7a28"></i>near limit</span><span><i style="background:#cd2837"></i>too steep</span><span>Click the map to choose your own target.</span></div></div>
+  <div class="row" id="sunrow" style="display:none;align-items:center;gap:10px"><span style="font-size:14px;min-width:190px">Time: <b id="shr">16:00</b></span><input id="hr" type="range" min="0" max="23" value="16" style="flex:1;min-width:150px" aria-label="Local time of day"><label style="font-size:14px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="sunhrs"> hours of sun per day</label></div>
+  <div class="lg" id="lg"><span><i style="background:#40b87c"></i>gentle</span><span><i style="background:#e8c440"></i>moderate</span><span><i style="background:#ec7a28"></i>near limit</span><span><i style="background:#cd2837"></i>too steep</span><span>Click the map to choose your own target.</span></div></div>
  <div>
   <div class="card"><h2>Where to?</h2><div class="row" id="tg" style="margin-top:0"></div>
    <p style="margin:12px 0 2px"><b>Safe slope limit:</b> <span id="mv">20</span>°</p>
    <input id="ms" type="range" min="8" max="35" value="20" aria-label="Maximum safe slope in degrees">
+   <label style="display:flex;gap:8px;align-items:center;margin:10px 0 0;font-size:15px"><input type="checkbox" id="avr" checked> Avoid rocky, textured ground</label>
    <div class="k"><div><b id="k1">-</b><span>walking distance</span></div><div><b id="k2">-</b><span>time at 2 km/h</span></div><div><b id="k3">-</b><span>steepest step</span></div><div><b id="k4">-</b><span>total climb</span></div></div>
-   <div class="warn" id="wn"></div></div>
+   <div class="warn" id="wn"></div>
+   <div class="row"><button class="btn" id="go3d" style="background:var(--acc);color:var(--on);border-color:var(--acc)">Walk this route in 3D →</button></div></div>
   <div class="card"><h2>Try this</h2><p style="margin:0;color:var(--mute)">Pick "Mesa summit" and drag the slope limit down. The route changes, and below about 25° it stops short of the top because the last slopes are too steep.</p></div>
  </div>
 </div>
-<p class="cr">Data: NASA/JPL-Caltech/University of Arizona (HiRISE DTM DTEEC_048842_1985_048908_1985_U01 and orthoimage ESP_048842_1985_RED_C_01), distributed by USGS Astrogeology. Slopes are computed from the elevation model.</p>
+<p class="cr">Data: NASA/JPL-Caltech/University of Arizona (HiRISE DTM DTEEC_048842_1985_048908_1985_U01 and orthoimage ESP_048842_1985_RED_C_01), distributed by USGS Astrogeology. Slopes are computed from the elevation model. Geology: Sun and Stack (2020), USGS SIM 3464, https://doi.org/10.3133/sim3464 (positions may be off by 100-200 m). Sunlight uses a simplified sun model. Surface texture is a proxy for rockiness, not a measurement of rocks.</p>
 </div>
 <script>
 const $=id=>document.getElementById(id);
 const START=[-100,380];
 const T=[{n:"Mesa top",x:-60,z:-222},{n:"Mesa summit",x:-250,z:-144},{n:"East rim",x:120,z:-330}];
 let M,N,S,cs,h,sl,hsh,photo,L={},ctx,MS=20,layer="photo",tgt=0,custom=null,path=null;
-const n=256;let k,sl2,h2,c2;
+const n=256;let k,sl2,h2,c2;let LY=null,TX=null,SB=null,GB=null,HRS=null,tx2=null,HR=16,AVR=true,LG0="",HMIN=0,HMAX=11;
 class Hp{constructor(){this.a=[]}push(p,q){const a=this.a;a.push([p,q]);let i=a.length-1;while(i>0){const r=(i-1)>>1;if(a[r][0]<=a[i][0])break;[a[r],a[i]]=[a[i],a[r]];i=r}}pop(){const a=this.a,t=a[0],l=a.pop();if(a.length){a[0]=l;let i=0;for(;;){let m=i,A=2*i+1,B=A+1;if(A<a.length&&a[A][0]<a[m][0])m=A;if(B<a.length&&a[B][0]<a[m][0])m=B;if(m===i)break;[a[m],a[i]]=[a[i],a[m]];i=m}}return t}get n(){return this.a.length}}
 const mk=()=>{const c=document.createElement("canvas");c.width=c.height=N;return c};
 function paint(c,fn){const x=c.getContext("2d"),d=x.createImageData(N,N);for(let i=0;i<N*N;i++){const p=fn(i);d.data[i*4]=p[0];d.data[i*4+1]=p[1];d.data[i*4+2]=p[2];d.data[i*4+3]=255}x.putImageData(d,0,0)}
@@ -58,10 +61,10 @@ function snap(c,r){let best=[c,r],bd=1e9;for(let R=0;R<30;R++)for(let dy=-R;dy<=
 function plan(s,t){const G=new Float32Array(n*n).fill(1e9),F=new Int32Array(n*n).fill(-1),q=new Hp(),si=s[1]*n+s[0],ti=t[1]*n+t[0];G[si]=0;q.push(0,si);
  while(q.n){const i=q.pop()[1];if(i===ti)break;const x=i%n,y=(i/n)|0;
   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;const a=x+dx,b=y+dy;if(a<0||b<0||a>=n||b>=n)continue;const j=b*n+a;if(sl2[j]>MS)continue;
-   const ng=G[i]+Math.hypot(dx,dy)*(1+Math.pow(sl2[j]/12,2));if(ng<G[j]){G[j]=ng;F[j]=i;q.push(ng+Math.hypot(a-t[0],b-t[1]),j)}}}
+   const ng=G[i]+Math.hypot(dx,dy)*(1+Math.pow(sl2[j]/12,2)+(AVR&&tx2?1.2*tx2[j]:0));if(ng<G[j]){G[j]=ng;F[j]=i;q.push(ng+Math.hypot(a-t[0],b-t[1]),j)}}}
  if(F[ti]<0&&si!==ti)return null;const p=[];for(let i=ti;i>=0;i=F[i]){p.push([i%n,(i/n)|0]);if(i===si)break}return p.reverse()}
 function route(){const s=snap(...cellOf(...START)),tc=custom||cellOf(T[tgt].x,T[tgt].z),t=snap(...tc),gap=Math.hypot(t[0]-tc[0],t[1]-tc[1])*S/n;path=plan(s,t);
- if(!path){["k1","k2","k3","k4"].forEach(i=>$(i).textContent="-");$("wn").textContent="No safe route at this slope limit. Raise the limit or pick another target.";draw();return}
+ $("go3d").disabled=!path;if(!path){["k1","k2","k3","k4"].forEach(i=>$(i).textContent="-");$("wn").textContent="No safe route at this slope limit. Raise the limit or pick another target.";draw();return}
  const st=S/n;let d=0,cl=0,ms=0,hz=0;path.forEach(([x,y],i)=>{const s2=sl2[y*n+x];ms=Math.max(ms,s2);if(s2>MS*.7)hz++;if(i){const[a,b]=path[i-1];d+=Math.hypot(x-a,y-b)*st;cl+=Math.max(0,h2[y*n+x]-h2[b*n+a])}});
  $("k1").textContent=(d/1000).toFixed(2)+" km";$("k2").textContent=Math.round(d/33.3)+" min";$("k3").textContent=ms.toFixed(0)+"°";$("k4").textContent=Math.round(cl)+" m";
  const gm=gap>S/n*1.5?"The ground at the target is steeper than your limit, so the route stops about "+Math.round(gap)+" m short. ":"";$("wn").textContent=gm+(hz?hz+" steps are close to your slope limit. Walk them slowly or look for another line.":"The route stays on gentle ground.");draw()}
@@ -72,10 +75,30 @@ function draw(){ctx.drawImage(L[layer],0,0);
  const s=cellOf(...START);dot(px(s[0]),px(s[1]),"Start","#fff");
  T.forEach((t,i)=>{const c=cellOf(t.x,t.z);dot(px(c[0]),px(c[1]),t.n,!custom&&i===tgt?"#5ff2e0":"#ffd9c4")});
  if(custom)dot(px(custom[0]),px(custom[1]),"Your target","#5ff2e0")}
+const gi=i=>{const G=LY.n,y=(i/N)|0,x=i%N;return((y*G/N)|0)*G+((x*G/N)|0)};
+const hex=x=>[parseInt(x.slice(1,3),16),parseInt(x.slice(3,5),16),parseInt(x.slice(5,7),16)];
+function paintLayers(){if(!LY)return;L.walk=mk();L.sun=mk();L.geo=mk();LG0=$("lg").innerHTML;
+ tx2=new Float32Array(n*n);const G=LY.n;for(let r=0;r<n;r++)for(let c=0;c<n;c++){const a=r*2*G+c*2;tx2[r*n+c]=Math.min(1,((TX[a]+TX[a+1]+TX[a+G]+TX[a+G+1])/4/LY.tex_scale)/LY.tex_p95)}
+ paint(L.walk,i=>{const g=hsh[i]*210,b=[g,g*.8,g*.65],t=Math.min(1,TX[gi(i)]/LY.tex_scale/LY.tex_p95),I=.6*Math.min(sl[i]/25,1)+.4*t,c=I>.66?[205,40,55]:I>.33?[232,196,64]:[64,184,124];return mix(b,c,I>.66?.85:.55)});
+ paint(L.geo,i=>{const g=hsh[i]*225,b=[g,g*.78,g*.62],u=GB[gi(i)],e=LY.geo.find(q=>q.id===u);return e?mix(b,hex(e.color),.6):b});
+ paintSun()}
+function paintSun(){if(!LY)return;const hrs=$("sunhrs").checked,s=LY.sun[HR];
+ paint(L.sun,i=>{const g=hsh[i]*225,q=gi(i);
+  if(hrs){const t=(HRS[q]-HMIN)/Math.max(1,HMAX-HMIN);return mix([28,40,110],[255,226,130],t).map(v=>v*(.6+.4*hsh[i]))}
+  if(s.el<=.5)return[g*.1,g*.1,g*.2];
+  return(SB[q]>>>HR)&1?[g,g*.9,g*.72]:[g*.25,g*.3,g*.5]})}
+function showHr(){const s=LY.sun[HR];$("shr").textContent=String(HR).padStart(2,"0")+":00 · "+(s.el>.5?"sun "+s.el.toFixed(0)+"° up":"sun below horizon")}
+function legendFor(l){
+ if(l==="walk")return'<span><i style="background:#40b87c"></i>easy</span><span><i style="background:#e8c440"></i>moderate</span><span><i style="background:#cd2837"></i>hard</span><span>Score = slope plus surface texture (a proxy for rockiness).</span>';
+ if(l==="sun")return($("sunhrs").checked?'<span><i style="background:#1c286e"></i>'+HMIN+' h</span><span><i style="background:#ffe282"></i>'+HMAX+' h of direct sun per day</span>':'<span><i style="background:#ffe7b8"></i>sunlit</span><span><i style="background:#4a5a99"></i>in shadow</span>')+'<span>'+LY.sun_note+'</span>';
+ if(l==="geo")return LY.geo.filter(u=>u.pct>0).map(u=>'<span><i style="background:'+u.color+'"></i>'+u.name+' ('+u.label+', '+u.pct+'%)</span>').join("")+'<span>'+LY.geo_note+'</span>';
+ return LG0}
 async function init(){
  try{M=await(await fetch("data/meta.json")).json();N=M.n;S=M.size_m;cs=S/N;h=new Float32Array(await(await fetch("data/height.bin")).arrayBuffer());
   photo=new Image();photo.src="data/terrain.jpg";await photo.decode()}
  catch(e){$("err").textContent="Could not load the data folder. Run python -m http.server 8000 in the project folder and open http://localhost:8000/map.html";return}
+ try{LY=await(await fetch("data/layers.json")).json();const f=async u=>new Uint8Array(await(await fetch(u)).arrayBuffer());TX=await f("data/texture.bin");GB=await f("data/geo.bin");SB=new Uint32Array(await(await fetch("data/sun.bin")).arrayBuffer());
+  HRS=new Uint8Array(SB.length);for(let i=0;i<SB.length;i++){let v=SB[i],c=0;while(v){c+=v&1;v>>>=1}HRS[i]=c}HMIN=99;HMAX=0;for(let i=0;i<HRS.length;i++){if(HRS[i]<HMIN)HMIN=HRS[i];if(HRS[i]>HMAX)HMAX=HRS[i]}}catch(e){LY=null}
  const cv=$("map");cv.width=cv.height=N;ctx=cv.getContext("2d");
  sl=new Float32Array(N*N);hsh=new Float32Array(N*N);
  for(let y=0;y<N;y++)for(let x=0;x<N;x++){const xa=Math.min(N-1,x+1),xb=Math.max(0,x-1),ya=Math.min(N-1,y+1),yb=Math.max(0,y-1),
@@ -85,11 +108,17 @@ async function init(){
  L.photo=mk();L.photo.getContext("2d").drawImage(photo,0,0,N,N);L.slope=mk();L.hill=mk();L.elev=mk();
  paint(L.hill,i=>{const g=hsh[i]*225;return[g,g*.78,g*.62]});
  paint(L.elev,i=>{const t=(h[i]-M.zmin)/(M.zmax-M.zmin),c=t<.5?mix([40,60,140],[60,180,170],t*2):mix([60,180,170],[246,226,130],(t-.5)*2),g=.55+hsh[i]*.45;return[c[0]*g,c[1]*g,c[2]*g]});
- paintSlope();
- [["photo","Photo"],["hill","Hillshade"],["slope","Slope hazard"],["elev","Elevation"]].forEach(([id,l])=>{const b=document.createElement("button");b.className="btn";b.textContent=l;b.setAttribute("aria-pressed",id===layer);b.onclick=()=>{layer=id;document.querySelectorAll("#layers .btn").forEach(x=>x.setAttribute("aria-pressed",x===b));draw()};$("layers").appendChild(b)});
+ paintSlope();paintLayers();
+ [["photo","Photo"],["hill","Hillshade"],["slope","Slope hazard"],["elev","Elevation"]].concat(LY?[["walk","Walkability"],["sun","Sunlight"],["geo","Geology"]]:[]).forEach(([id,l])=>{const b=document.createElement("button");b.className="btn";b.textContent=l;b.setAttribute("aria-pressed",id===layer);b.onclick=()=>{layer=id;document.querySelectorAll("#layers .btn").forEach(x=>x.setAttribute("aria-pressed",x===b));draw()};$("layers").appendChild(b)});
  T.forEach((t,i)=>{const b=document.createElement("button");b.className="btn";b.textContent=t.n;b.setAttribute("aria-pressed",i===tgt);b.onclick=()=>{tgt=i;custom=null;document.querySelectorAll("#tg .btn").forEach(x=>x.setAttribute("aria-pressed",x===b));route()};$("tg").appendChild(b)});
  cv.onclick=e=>{const r=cv.getBoundingClientRect();custom=[Math.round((e.clientX-r.left)/r.width*(n-1)),Math.round((e.clientY-r.top)/r.height*(n-1))];document.querySelectorAll("#tg .btn").forEach(x=>x.setAttribute("aria-pressed",false));route()};
  $("ms").oninput=e=>{MS=+e.target.value;$("mv").textContent=MS;paintSlope();route()};
+ $("go3d").onclick=()=>{if(!path)return;const w=c=>Math.round(((c/(n-1))-.5)*S*10)/10;
+  try{localStorage.setItem("marsRoute",JSON.stringify({v:1,name:custom?"Custom target":T[tgt].n,limit:MS,path:path.map(([c,r])=>[w(c),w(r)])}))}catch(e){}
+  location.href="walk.html"};
+ const _d=draw;draw=function(){$("sunrow").style.display=layer==="sun"?"flex":"none";$("lg").innerHTML=legendFor(layer);_d()};
+ if(LY){$("hr").oninput=e=>{HR=+e.target.value;showHr();paintSun();draw()};$("sunhrs").onchange=()=>{paintSun();draw()};showHr()}
+ $("avr").onchange=e=>{AVR=e.target.checked;route()};
  route()}
 init();
 </script></body></html>
